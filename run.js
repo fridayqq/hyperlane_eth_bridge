@@ -3,6 +3,7 @@ const { Web3 } = require('web3');
 const { bridgeTokens } = require('./bridge');
 const rpcUrls = require('./rpcUrls');
 const { setTimeout } = require('timers/promises');
+const config = require('./config');
 
 // Функция для чтения кошельков из файла
 function readWalletsFromFile(filename) {
@@ -73,7 +74,7 @@ async function performBridges(route, initialAmount, minDelay, maxDelay, wallet) 
     console.log(`Используемый кошелек: ${wallet.address}`);
     
     let retryCount = 0;
-    const maxRetries = 3;
+    const maxRetries = config.maxRetries;
 
     while (retryCount < maxRetries) {
       try {
@@ -96,7 +97,7 @@ async function performBridges(route, initialAmount, minDelay, maxDelay, wallet) 
 
         retryCount++;
         if (retryCount < maxRetries) {
-          const retryDelay = Math.floor(getRandomNumber(30, 60)) * 1000;
+          const retryDelay = Math.floor(getRandomNumber(config.minRetryDelay, config.maxRetryDelay)) * 1000;
           console.log(`Повторная попытка через ${retryDelay / 1000} секунд...`);
           await setTimeout(retryDelay);
         } else {
@@ -118,12 +119,6 @@ async function performBridges(route, initialAmount, minDelay, maxDelay, wallet) 
 
 // Основная функция run
 async function run() {
-  const allowedNetworks = ["base", "linea", "arbitrum", "optimism", "scroll"];
-  const minBridges = 2;
-  const maxBridges = 4;
-  const minDelay = 60; // минимальная задержка в секундах
-  const maxDelay = 300; // максимальная задержка в секундах
-
   const wallets = readWalletsFromFile('wallets.txt');
   if (wallets.length === 0) {
     console.error("Ошибка: файл wallets.txt пуст или не содержит валидных кошельков");
@@ -142,27 +137,27 @@ async function run() {
 
   for (const wallet of shuffledWallets) {
     console.log(`\nРабота с кошельком: ${wallet.address}`);
-    const balances = await checkBalancesInAllNetworks(allowedNetworks, wallet);
+    const balances = await checkBalancesInAllNetworks(config.allowedNetworks, wallet);
     console.log("Балансы:", balances);
 
     const maxBalanceNetwork = Object.entries(balances).reduce((a, b) => a[1] > b[1] ? a : b)[0];
     const maxBalance = balances[maxBalanceNetwork];
 
-    if (maxBalance > 0.008) {
-      const initialAmount = maxBalance * getRandomNumber(0.7, 0.9);
-      const numberOfBridges = Math.floor(getRandomNumber(minBridges, maxBridges + 1));
-      const route = generateRoute(maxBalanceNetwork, allowedNetworks, numberOfBridges);
+    if (maxBalance > config.minEthBalance) {
+      const initialAmount = maxBalance * getRandomNumber(config.minBridgeAmount, config.maxBridgeAmount);
+      const numberOfBridges = Math.floor(getRandomNumber(config.minBridges, config.maxBridges + 1));
+      const route = generateRoute(maxBalanceNetwork, config.allowedNetworks, numberOfBridges);
 
       console.log(`Выбрана сеть: ${maxBalanceNetwork}`);
       console.log(`Начальная сумма: ${initialAmount.toFixed(6)} ETH`);
       console.log("Сгенерированный маршрут:", route);
 
       try {
-        await performBridges(route, initialAmount, minDelay, maxDelay, wallet);
+        await performBridges(route, initialAmount, config.minDelay, config.maxDelay, wallet);
         bridgeStats[wallet.address] = (bridgeStats[wallet.address] || 0) + route.length - 1;
 
         // Пауза только если бриджи были выполнены успешно
-        const pauseDuration = Math.floor(getRandomNumber(300, 600)); // Пауза 5-10 минут
+        const pauseDuration = Math.floor(getRandomNumber(config.minPauseDuration, config.maxPauseDuration));
         console.log(`Пауза ${pauseDuration} секунд перед следующим кошельком...`);
         await setTimeout(pauseDuration * 1000);
       } catch (error) {
@@ -187,7 +182,7 @@ async function run() {
   }
 }
 
-// Объект с URL сканеров для каждой сети
+// Объект с URL скане��ов для каждой сети
 const scannerUrls = {
   base: "https://basescan.org/tx/",
   scroll: "https://scrollscan.com/tx/",
