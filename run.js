@@ -60,6 +60,15 @@ function generateRoute(startNetwork, networks, numberOfBridges) {
   return route;
 }
 
+// Функция для перемешивания массива
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 // Функция для выполнения серии бриджей
 async function performBridges(route, initialAmount, minDelay, maxDelay, wallet) {
   let currentAmount = initialAmount;
@@ -82,8 +91,20 @@ async function performBridges(route, initialAmount, minDelay, maxDelay, wallet) 
         if (result && result.transactionHash) {
           console.log(`Транзакция подтверждена. Хэш: ${result.transactionHash}`);
           console.log(`Ссылка на сканер: ${scannerUrls[sourceNetwork]}${result.transactionHash}`);
+          if (result.status !== undefined) {
+            console.log(`Статус: ${result.status.toString()}`);
+          }
+          if (result.gasUsed !== undefined) {
+            console.log(`Использовано газа: ${result.gasUsed.toString()}`);
+          }
+          if (result.receipt) {
+            console.log("Детали транзакции:", JSON.stringify(result.receipt, (key, value) =>
+              typeof value === 'bigint' ? value.toString() : value
+            ));
+          }
           break;
         }
+        
       } catch (error) {
         console.error(`Ошибка при выполнении бриджа из ${sourceNetwork} в ${destinationNetwork}:`, error.message);
         if (error.receipt) {
@@ -125,9 +146,10 @@ async function run() {
     return;
   }
 
-  // Перемешиваем кошельки и выводим информацию о порядке
-  const shuffledWallets = wallets.sort(() => Math.random() - 0.5);
-  console.log("Порядок обработки кошельков:");
+  // Перемешиваем кошельки, выбираем 5 случайных и выводим информацию о порядке
+  const quantityWallets = config.quantityWallets
+  const shuffledWallets = shuffle(wallets).slice(0, quantityWallets);
+  console.log("Порядок обработки случайных кошельков:");
   shuffledWallets.forEach((wallet, index) => {
     console.log(`${index + 1}. ${wallet.address}`);
   });
@@ -182,7 +204,7 @@ async function run() {
   }
 }
 
-// Объект с URL скане��ов для каждой сети
+// Объект с URL сканеров для каждой сети
 const scannerUrls = {
   base: "https://basescan.org/tx/",
   scroll: "https://scrollscan.com/tx/",
